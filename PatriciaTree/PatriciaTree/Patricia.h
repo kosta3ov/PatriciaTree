@@ -1,66 +1,62 @@
-//
-//  Patricia.h
-//  PatriciaTree
-//
-//  Created by Константин on 02.11.14.
-//  Copyright (c) 2014 KONSTANTINPRODUCTIONS. All rights reserved.
-//
-
-#ifndef __PatriciaTree__Patricia__
-#define __PatriciaTree__Patricia__
+#ifndef PATRICIA_TREE_H
+#define PATRICIA_TREE_H
 
 #include <iostream>
-
+#include <fstream>
 using namespace std;
 
-class TKey {
+class TData {
 public:
-    char* KeyVal;
-  //  int KeyLength; optional
-};
-
-class TPair {
-public:
+    char* Key;
     int Value;
-    TKey* Key;
+    TData(char* key, int val) : Key(key), Value(val) {};
+    TData();
 };
 
-class TNode {
-    
+class Patricia_Tree
+{
 public:
-    TNode();
-    TNode* Left;
-    TNode* Right;
-    int BitCheck;
-    TPair* Data;
-};
-
-class TPatriciaTree {
+    Patricia_Tree(TData* junk);                        // constructor (ONE argument)
     
-public:
-    // functions called from main
-    TPatriciaTree (TPair* junk);
-    bool Insert (TPair* newData);
-    bool LookFor (char* key);
-    bool Remove (char* key);
-    void Print ();
-    int GetNodeCount ();
+    bool insert(TData* data);         // insert function to be called from main
+    bool lookup(char* key);         // search function to be called from main
+    bool remove(char* key);         // remove/delete function to be called from main
+    void inOrderPrint();              // print function to be called from main
+    int  getNodeCount() {
+        return m_node_count;
+    }      // function to determine total nodes in tree
     
 private:
-    //same functions called by public functions
-    TNode* Root;
-    TNode* Dummy;
-    int NodeCount;
+    class Node // Patricia Trie's node class
+    {
+    public:
+        Node()          // constructor (FOUR arguments)
+        {
+            m_left = NULL;
+            m_right = NULL;
+            m_bit_check = 0;
+            m_value = nullptr;
+        }
+        
+        Node *m_left;       // zero_ptr
+        Node *m_right;      // one_ptr
+        int m_bit_check;    // bit_check
+        TData* m_value;        // variable to store integer value
+    };
     
-    bool GetBitAtPos (char* key, int position);
-    int GetFirstDiffBitPos (char* key1, char* key2);
-    TNode* Insert (TPair* newData, int &returnedBitCheck); // first insert (node count = 0)
-    bool Insert (TNode* root, TPair* newData, int &returnedBitCheck); // node count > 1
-    bool LookFor (TNode* root, char* key);
-    bool Remove (TNode* root, char* key);
-    void Print (TNode* root, int previous_bit_check);
-    void RecursiveDelete(TNode* root);  // function to be called by destructor
-
+    Node *m_root;           // the root pointer to begin with
+    Node *m_dummy;          // dummy node
+    
+    int m_node_count;       // count of total nodes in tree
+    
+    bool getBitAtPos(char* key, int position);                              // function to determine a 0 or 1 at given bit position
+    int  getFirstDiffBitPos(char* key1, char* key2);                        // function to determine first differing MSB
+    Node* insert(TData* data, int &returnedBitCheck);                         // first function called by public insert (node count = 0)
+    bool insert(Node *root, TData* data, int &returnedBitCheck);              // second function called by public insert (node count > 1)
+    bool lookup(Node *root, char* key);                                     // function called by public search
+    bool remove(Node *root, char* key);                                     // function called by public remove
+    void inOrderPrint(Node *root, int previous_bit_check);  // function called by public inOrderPrint
+    void recursiveDelete(Node *root);                                       // function to be called by destructor
 };
+#endif
 
-#endif /* defined(__PatriciaTree__Patricia__) */

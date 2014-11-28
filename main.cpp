@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstring>
+
 
 using namespace std;
 
@@ -34,8 +36,8 @@ void PostWarning (const WarningReasons reason) {
     }
 }
 
-void* operator new (size_t, const nothrow_t&) noexcept;
-void* operator new[] (size_t, const nothrow_t&) noexcept;
+void* operator new (size_t, const nothrow_t&) throw();
+void* operator new[] (size_t, const nothrow_t&) throw();
 
 int min (int a, int b) {
     return a < b ? a : b;
@@ -45,11 +47,10 @@ int max (int a, int b) {
     return a > b ? a : b;
 }
 
-
 class TVector {
 public:
-    int Capacity;
-    int Size;
+    size_t Capacity;
+    size_t Size;
     char* Data;
     size_t GetOptimalCapacity (size_t newCap) {
         size_t res = max(Capacity,1);
@@ -63,26 +64,26 @@ public:
     }
 
     void Resize (size_t newSize) {
-        size_t optimalCap = GetOptimalCapacity(newSize);
+        size_t optimalCap = max(GetOptimalCapacity(newSize),2);
         char* newData = new char[optimalCap];
-        if (!newData) {
-            PostWarning (memoryError);
-            exit(0);
-        }
-        if (optimalCap > Capacity) {
-            for (int i = 0; i < Size; i++) {
-                newData[i] = Data[i];
+        if (Data) {
+            if (optimalCap > Capacity) {
+                for (int i = 0; i < Size; i++) {
+                    newData[i] = Data[i];
+                }
+            }
+            else {
+                for (int i = 0; i < newSize; i++) {
+                    newData[i] = Data[i];
+                }
             }
         }
-        else {
-            for (int i = 0; i < newSize; i++) {
-                newData[i] = Data[i];
-            }
-        }
-        Capacity = optimalCap;
-        delete [] Data;
-        Data = newData;
         Size = newSize;
+        Capacity = optimalCap;
+        if (Data) {
+            delete [] Data;
+        }
+        Data = newData;
     }
 
     TVector& operator = (TVector& vector) {
@@ -90,65 +91,24 @@ public:
         Resize(0);
         Capacity = max(1, vector.Capacity);
         Data = new char[Capacity];
-        if(!Data) {
-            PostWarning(memoryError);
-            exit(0);
-        }
+//        if(!Data) {
+//            PostWarning(memoryError);
+//            exit(0);
+//        }
         while (Size < vector.Size) {
             Data[Size] = vector.Data[Size];
             Size++;
         }
         return *this;
     }
-    int GetSize() {
+    size_t GetSize() {
         return Size;
     }
     bool IsEmpty() {
         return !Size;
     }
-    void Clear() {
-        delete[] Data;
-        Capacity = 1;
-        Size = 0;
-        Data = new char[1];
-        if(!Data) {
-            PostWarning(memoryError);
-            exit(0);
-        }
-    }
     char& operator [] (const int p) {
         return Data[p];
-    }
-    char& at(int p) {
-        if (p >= 0 && p < Size) {
-            return Data[p];
-        }
-        throw;
-    }
-    char& prev() {
-        return Data[Size - 1];
-    }
-    void push_back (const char& c) {
-        if(Size == Capacity) {
-            Resize(Size);
-            Data[Size] = c;
-            Size++;
-        }
-    }
-    void pop_back () {
-        Size--;
-        if(Size && Size < (Capacity >> 1)) { // div 2
-            Resize(Size);
-        }
-    }
-    char* begin() {
-        return Data;
-    }
-    char* end() {
-        return Data + Size;
-    }
-    char* operator + (int t) {
-        return Data + t;
     }
     bool operator == (TVector& vector) {
         if (Size != vector.Size)
@@ -173,8 +133,8 @@ class TString : public TVector {
 public:
     virtual ~TString() {};
     TString(char* s);
-    
-    int GetSize() {
+    TString() {};
+    size_t GetSize() {
         return TVector::GetSize()-1;
     }
     char& operator [] (int pos) {
@@ -192,29 +152,11 @@ public:
 };
 
 TString::TString(char *s){
-    int length = strlen(s);
+    size_t length = strlen(s);
     Capacity = 1;
     Data = new char[Capacity];
     TVector::Resize(length + 1);
     strcpy((char*)*this, s);
-}
-
-bool FWriteString (FILE* file, TString& string){
-    int size = string.GetSize();
-    int a;
-    a += ::fwrite(&size, sizeof(int), 1, file);
-    a += ::fwrite((char*)string, string.GetSize()*sizeof(char), 1, file);
-    return a == 2;
-}
-
-bool FReadString(FILE* file, TString& string) {
-    int size;
-    int a;
-    a += ::fread(&size, sizeof(int), 1, file);
-    string.Resize(size + 1);
-    a += ::fread((char*)string, size, 1, file);
-    string[size] = '\0';
-    return a == 2;
 }
 
 int GetBit (TString& string, int n){
@@ -224,11 +166,11 @@ int GetBit (TString& string, int n){
     if (n >= (string.GetSize() << 3)) { //*8
         return 0;
     }
-    return string[n >> 3] & (1 << (n & 7)); //трабла
+    return string[n >> 3] & (1 << (n & 7)) ? 1 : 0;
 }
 
 int DiffBit (TString& str1, TString& str2) {
-    int minimum = min(str1.GetSize(), str2.GetSize()) + 1;
+    size_t minimum = min(str1.GetSize(), str2.GetSize()) + 1;
     for (int i = 0; i < minimum; i++) {
         if(str1[i] != str2[i])
             minimum = i;
@@ -258,39 +200,132 @@ u_int64 Hash (TString& string){
     return h;
 }
 
-class TPatricia {
-protected:
-    class TNode {
-    public:
-        TNode* Links[2];
-        int NBit;
-        TString* Key;
-        int* Value;
+u_int64 Hash(u_int64 x) {
+    return x;
+}
+
+
+bool FWrite (FILE* file, u_int64 num) {
+    return ::fwrite(&num, sizeof(u_int64), 1, file);
+}
+
+bool FRead (FILE* file, u_int64& num) {
+    return ::fread(&num, sizeof(u_int64), 1, file);
+}
+
+bool FWriteString (FILE* file, TString& string){
+    size_t size = string.GetSize();
+    int a = 0;
+    a += ::fwrite(&size, sizeof(int), 1, file);
+    a += ::fwrite((char*)string, string.GetSize()*sizeof(char), 1, file);
+    return a == 2;
+}
+
+bool FReadString(FILE* file, TString& string) {
+    int size;
+    int a = 0;
+    a += ::fread(&size, sizeof(int), 1, file);
+    string.Resize(size + 1);
+    a += ::fread((char*)string, size * sizeof(char), 1, file);
+    string[size] = '\0';
+    return a == 2;
+}
+
+class TNode {
+public:
+    TNode* Links[2];
+    TString* Key;
+    u_int64* Value;
+    int NBit;
+
+    TNode() {};
+    TNode(TString* key, u_int64* value, int nbit) : Key(key), Value(value), NBit(nbit) {
+        Links[0] = this;
+        Links[1] = this;
+    }
+    ~TNode() {
+        delete Key;
+        delete Value;
+        if (Links[0]->NBit > NBit) {
+            delete Links[0];
+        }
+        if (Links[1]->NBit > NBit) {
+            delete Links[1];
+        }
+    }
+    int NodeWrite(FILE* file, int id) {
+        FWrite(file, id);
+        FWrite(file, NBit);
+        FWriteString(file, *Key);
+        FWrite(file, *Value);
+        FWrite(file, Hash(id) + Hash(NBit) + Hash(*Key) + Hash(*Value));
+        u_int64* p = Value;
+        Value = (u_int64*)((char*)0 + id);
+        int cnt = 1;
+        if (Links[0]->NBit > NBit) {
+            cnt += Links[0]->NodeWrite(file, id + cnt);
+        }
+        else {
+            ::fwrite((int*)&Links[0]->Value, sizeof(int), 1, file);
+        }
+        if (Links[1]->NBit > NBit) {
+            cnt += Links[1]->NodeWrite(file, id + cnt);
+        }
+        else {
+            ::fwrite((int*)&Links[1]->Value, sizeof(int), 1, file);
+        }
+        Value = p;
+        return cnt;
+    }
+    TNode* NodeRead(FILE* file, int id, int& sum, TNode** arr) {
+        u_int64 readId;
+        if (!::FRead(file, readId)) {
+            return NULL;
+        }
+        if (readId < id) {
+            return arr[readId];
+        }
+        TNode* t = new TNode;
+        arr[id] = t;
+        u_int64 nbit = (u_int64)t->NBit;
+        if (!FRead(file, nbit)) {
+            return NULL;
+        }
+        t->NBit = nbit;
+        t->Key = new TString();
+        if (!FReadString(file, *t->Key)) {
+            return NULL;
+        }
+        t->Value = new u_int64;
+        if (!FRead(file, *t->Value)) {
+            return NULL;
+        }
+        u_int64 h;
+        if (!FRead(file, h)) {
+            return NULL;
+        }
+        if (h != Hash(id) + Hash(t->NBit) + Hash(*t->Key) + Hash(*t->Value)) {
+            return NULL;
+        }
+        int cnt = 1;
+        t->Links[0] = NodeRead(file, id + cnt, cnt, arr);
+        if (!t->Links[0]) {
+            return NULL;
+        }
+        t->Links[1] = NodeRead(file, id + cnt, cnt, arr);
+        if (!t->Links[1]) {
+            return NULL;
+        }
         
-        TNode() {};
-        TNode(TString* key, int* value, int nbit) : Key(key), Value(value), NBit(nbit) {
-            Links[0] = this;
-            Links[1] = this;
-        }
-        ~TNode() {
-            delete Key;
-            delete Value;
-            if (Links[0]->NBit > NBit) {
-                delete Links[0];
-            }
-            if (Links[1]->NBit > NBit) {
-                delete Links[1];
-            }
-        }
-//        int FileWrite(FILE* file, int id) {
-//        }
-//        TNode* FileRead(FILE* file, int id, int& sum, TNode** arr) {
-//            int rid;
-//            
-//        }
-    };
+        sum += cnt;
+        return t;
+    }
+};
+
+class TPatricia {
+public:
     TNode* Root;
-    int s;
+    u_int64 s;
     TNode* Find(TString& key, TNode* start) {
         TNode* t = start;
         int bit = 0;
@@ -313,19 +348,19 @@ protected:
         }
         return t;
     }
-    void Insert (TString& key, int value, int p) {
+    void Insert (TString& key, u_int64 value, int p) {
         TNode* ptr = Root;
         int bit = 0;
         while (ptr->Links[bit]->NBit > ptr->NBit && p >= ptr->Links[bit]->NBit) {
             ptr = ptr->Links[bit];
             bit = GetBit(key, ptr->NBit);
         }
-        TNode* t = new TNode (new TString(key), new int(value), p);
+        TNode* t = new TNode (new TString(key), new u_int64(value), p);
         t->Links[GetBit(key, p) ^ 1] = ptr->Links[bit];
         ptr->Links[bit] = t;
     }
-public:
-    TPatricia() : Root(nullptr), s(0) {}
+
+    TPatricia() : Root(NULL), s(0) {}
     virtual ~TPatricia() {
         if (s) {
             delete Root;
@@ -340,13 +375,9 @@ public:
         }
         return 0;
     }
-    int Insert (TString& key, int value) {
+    int Insert (TString& key, u_int64 value) {
         if (!s) {
-            Root = new TNode(new TString(key), new int(value), -1);
-            if (!Root || !Root->Key || !Root->Value) {
-                PostWarning(memoryError);
-                exit(0);
-            }
+            Root = new TNode(new TString(key), new u_int64(value), -1);
             s++;
             return 1;
         }
@@ -369,7 +400,7 @@ public:
             }
             else {
                 delete Root;
-                Root = nullptr;
+                Root = NULL;
                 s--;
                 return 1;
             }
@@ -382,19 +413,19 @@ public:
         }
         TNode* b = Find(*a->Key, a);
         b->Links[GetBit(*(a->Key), b->NBit)] = up;
-        swap(up->Key, a->Key);
-        swap(up->Value, a->Value);
+        ::swap(up->Key, a->Key);
+        ::swap(up->Value, a->Value);
         par->Links[GetBit(key, par->NBit)] = a->Links[GetBit(key, a->NBit)^1];
         a->Links[0] = a->Links[1] = a;
         delete a;
         s--;
         return 1;
     }
-    int GetSize() {
+    u_int64 GetSize() {
         return s;
     }
     
-    int& operator [] (TString& key) {
+    u_int64& operator [] (TString& key) {
         if (s) {
             TNode* t = Find(key, Root);
             int pos = GetBit(key, t->NBit);
@@ -409,19 +440,56 @@ public:
                 return *(t->Links[GetBit(key, t->NBit)]->Value);
             }
         }
-        Root = new TNode(new TString(key), new int(0), -1);
-        if (!Root || !Root->Key || !Root->Value) {
-            PostWarning(memoryError);
-            exit(0);
-        }
+        Root = new TNode(new TString(key), new u_int64(0), -1);
         s++;
         return *(Root->Value);
     }
-    
-    
+    void swap(TPatricia& t){
+        ::swap(s, t.s);
+        ::swap(Root, t.Root);
+    }
+  
 };
 
-
+void WriteData (FILE* file, TPatricia& patricia) {
+    if(!::fwrite("pamaicirtapaekilskoolti", 23, 1, file)) {
+        return;
+    }
+    if (!FWrite(file, patricia.s)) {
+        return;
+    }
+    if (!patricia.s) {
+        return;
+    }
+    patricia.Root->NodeWrite(file, 0);
+}
+int ReadData (FILE* file, TPatricia& patricia) {
+    char arr[23];
+    if(!::fread(arr, 23, 1, file)) {
+        return 0;
+    }
+    if(strcmp(arr, "pamaicirtapaekilskoolti")) {
+        return -1;
+    }
+    if (!FRead(file, patricia.s)) {
+        return 0;
+    }
+    if (!patricia.s) {
+        return 1;
+    }
+    TNode** v = new TNode*[patricia.s];
+//    if (!v) {
+//        PostWarning(memoryError);
+//        exit(0);
+//    }
+    int rs = 0;
+    patricia.Root = patricia.Root->NodeRead(file, 0, rs, v);
+    delete [] v;
+    if (!patricia.Root) {
+        return 0;
+    }
+    return rs == patricia.s;
+}
 
 void ToLow (char* c) {
     if (*c >= 'A' && *c <= 'Z') {
@@ -436,13 +504,11 @@ void StringToLow (char* s) {
     }
 }
 
-
-
 int main() {
     char str[2049];
     u_int64 num;
     TPatricia patricia;
-    
+
     while (scanf("%s", str) == 1) {
         //INSERT
         if (*str == '+') {
@@ -473,9 +539,10 @@ int main() {
                 scanf("%s", str);
                 FILE* f = fopen(str, "wb");
                 if (!f) {
-                    
+                    PostWarning(fileCreateError);
+                    continue;
                 }
-//              fwrite();
+                WriteData(f, patricia);
                 printf("OK\n");
                 fclose(f);
             }
@@ -484,8 +551,22 @@ int main() {
                 scanf("%s", str);
                 FILE* f = fopen(str, "rb");
                 if (!f) {
-                    
+                    PostWarning(fileAccessError);
+                    continue;
                 }
+                TPatricia tmp;
+                int cond = ReadData(f, patricia);
+                if (cond == 1) {
+                    tmp.swap(patricia);
+                    printf("OK\n");
+                }
+                else if (cond == -1) {
+                    printf("ERROR: It is not a patricia file\n");
+                }
+                else {
+                    printf("File is correpted\n");
+                }
+                fclose(f);
             }
         }
         else {
